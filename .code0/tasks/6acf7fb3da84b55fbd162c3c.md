@@ -7,9 +7,9 @@ Repositories: sakshiisiinghh/edvexa-iot
 
 - [x] Initialize Go module and dependencies
 - [x] Environment-driven configuration package
-- [ ] PostgreSQL connection pool
-- [ ] chi router, slog request logging and health endpoints
-- [ ] Entrypoint wiring with graceful shutdown and HTTP timeouts
+- [x] PostgreSQL connection pool
+- [x] chi router, slog request logging and health endpoints
+- [x] Entrypoint wiring with graceful shutdown and HTTP timeouts
 - [ ] docker-compose.yml with PostgreSQL health check
 - [ ] Makefile, .env.example and .gitignore
 - [ ] Automated tests
