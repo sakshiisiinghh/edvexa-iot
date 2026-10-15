@@ -1,7 +1,6 @@
-// Package config loads the service's configuration from environment
-// variables. Every value has a usable default except DATABASE_URL, which the
-// service refuses to start without: guessing a connection string would let a
-// misconfigured deployment look healthy until its first query.
+// Package config loads service configuration from the environment. Every
+// value has a default except DATABASE_URL — guessing a connection string
+// would let a misconfigured deployment look healthy until its first query.
 package config
 
 import (
@@ -13,8 +12,7 @@ import (
 	"time"
 )
 
-// Config is the fully resolved configuration for one process. It is read once
-// at startup and then treated as immutable.
+// Config is read once at startup and treated as immutable thereafter.
 type Config struct {
 	AppEnv   string
 	LogLevel slog.Level
@@ -26,16 +24,13 @@ type Config struct {
 	ShutdownTimeout time.Duration
 
 	DatabaseURL string
-	// DBMaxConns is int32 to match pgxpool.Config.MaxConns exactly, so the db
-	// package can assign it without a conversion.
+	// int32 matches pgxpool.Config.MaxConns, avoiding a conversion in the db package.
 	DBMaxConns       int32
 	DBConnectTimeout time.Duration
 }
 
-// Addr is the address the HTTP server listens on.
 func (c Config) Addr() string { return ":" + c.HTTPPort }
 
-// IsProduction reports whether logs should be machine-readable.
 func (c Config) IsProduction() bool { return c.AppEnv == "production" }
 
 // Load reads the configuration from the environment. It reports every invalid
@@ -45,10 +40,10 @@ func Load() (Config, error) {
 	var l loader
 
 	cfg := Config{
-		AppEnv:   l.str("APP_ENV", "development"),
+		AppEnv:   getenv("APP_ENV", "development"),
 		LogLevel: l.level("LOG_LEVEL", slog.LevelInfo),
 
-		HTTPPort:        l.str("HTTP_PORT", "8080"),
+		HTTPPort:        getenv("HTTP_PORT", "8080"),
 		ReadTimeout:     l.duration("READ_TIMEOUT", 10*time.Second),
 		WriteTimeout:    l.duration("WRITE_TIMEOUT", 15*time.Second),
 		IdleTimeout:     l.duration("IDLE_TIMEOUT", 60*time.Second),
@@ -65,14 +60,13 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// loader reads environment variables, collecting failures instead of
-// returning them one at a time. An unset variable always falls back to the
-// default; only a set-but-unparseable value is an error.
+// An unset variable falls back to its default; only a set-but-unparseable
+// value is an error.
 type loader struct {
 	errs []error
 }
 
-func (l *loader) str(key, def string) string {
+func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
