@@ -9,10 +9,12 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/realtime"
 )
 
 type alertHandler struct {
 	alerts *alert.Repository
+	hub    *realtime.Hub
 	logger *slog.Logger
 }
 
@@ -52,6 +54,12 @@ func (h alertHandler) respondTransition(w http.ResponseWriter, r *http.Request, 
 	case err != nil:
 		internalError(h.logger, w, r, "transition alert", err)
 	default:
+		// Acknowledge/Resolve already returned successfully by this point,
+		// which under pgx means their UPDATE committed - so this can never
+		// announce a transition that a later rollback undoes.
+		if h.hub != nil {
+			h.hub.Publish("alert", a)
+		}
 		writeJSON(w, http.StatusOK, a)
 	}
 }

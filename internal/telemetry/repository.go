@@ -14,12 +14,16 @@ import (
 // set happens to satisfy this interface structurally, and main.go is the
 // only place that wires the two together.
 type AlertEvaluator interface {
-	// Evaluate runs inside the caller's transaction. A violation that loses
-	// the race to create an alert is a normal outcome, not an error - see
-	// internal/alert.Repository.Evaluate. Any error returned here aborts the
-	// whole transaction, including the telemetry row just inserted: alert
-	// state and telemetry state are meant to rise and fall together.
-	Evaluate(ctx context.Context, tx pgx.Tx, devicePK, metric string, value float64) error
+	// Evaluate runs inside the caller's transaction and reports whether IT
+	// created a new alert - false covers both "no threshold was violated"
+	// and "another transaction won the race to create one first," which are
+	// normal outcomes, not errors; see internal/alert.Repository.Evaluate.
+	// created is what lets a caller publish an alert-raised notification
+	// only once per alert, not once per reading that happened to violate an
+	// already-unresolved one. Any error returned here aborts the whole
+	// transaction, including the telemetry row just inserted: alert state
+	// and telemetry state are meant to rise and fall together.
+	Evaluate(ctx context.Context, tx pgx.Tx, devicePK, metric string, value float64) (alertID int64, created bool, err error)
 }
 
 type Repository struct {
@@ -68,15 +72,19 @@ func (r *Repository) Insert(ctx context.Context, in Event) (Result, error) {
 	case err == nil:
 		// Only a genuine create reaches here - never a duplicate or conflict -
 		// so a duplicate reading cannot raise a second alert.
+		var alertID int64
+		var alertCreated bool
 		if r.evaluator != nil {
-			if err := r.evaluator.Evaluate(ctx, tx, in.DevicePK, in.Metric, in.Value); err != nil {
-				return Result{}, fmt.Errorf("evaluate thresholds: %w", err)
+			var evalErr error
+			alertID, alertCreated, evalErr = r.evaluator.Evaluate(ctx, tx, in.DevicePK, in.Metric, in.Value)
+			if evalErr != nil {
+				return Result{}, fmt.Errorf("evaluate thresholds: %w", evalErr)
 			}
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return Result{}, fmt.Errorf("commit: %w", err)
 		}
-		return Result{Outcome: OutcomeCreated, Event: in}, nil
+		return Result{Outcome: OutcomeCreated, Event: in, AlertCreated: alertCreated, AlertID: alertID}, nil
 
 	case errors.Is(err, pgx.ErrNoRows):
 		var existingHash string

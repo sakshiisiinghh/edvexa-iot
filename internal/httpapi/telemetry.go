@@ -8,7 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/realtime"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 )
 
@@ -20,6 +22,7 @@ const (
 type telemetryHandler struct {
 	devices   *device.Repository
 	telemetry *telemetry.Repository
+	hub       *realtime.Hub
 	logger    *slog.Logger
 }
 
@@ -66,6 +69,22 @@ func (h telemetryHandler) ingest(w http.ResponseWriter, r *http.Request) {
 
 	switch result.Outcome {
 	case telemetry.OutcomeCreated:
+		// Insert has already returned successfully, which only happens after
+		// its transaction committed - so publishing here can never announce a
+		// reading that a later rollback undoes. Only this outcome publishes:
+		// a duplicate resubmission must not emit a second telemetry event.
+		if h.hub != nil {
+			h.hub.Publish("telemetry", eventResponse(result.Event))
+			if result.AlertCreated {
+				h.hub.Publish("alert", map[string]any{
+					"id":               result.AlertID,
+					"device_id":        in.DeviceID,
+					"metric":           in.Metric,
+					"triggering_value": in.Value,
+					"status":           alert.StatusActive,
+				})
+			}
+		}
 		writeJSON(w, http.StatusCreated, eventResponse(result.Event))
 	case telemetry.OutcomeDuplicate:
 		writeJSON(w, http.StatusOK, eventResponse(result.Event))

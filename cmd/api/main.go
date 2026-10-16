@@ -16,6 +16,7 @@ import (
 	"github.com/sakshiisiinghh/edvexa-iot/internal/db"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/httpapi"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/realtime"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 )
 
@@ -54,6 +55,7 @@ func run() error {
 	telemetryRepo := telemetry.NewRepository(pool)
 	alertRepo := alert.NewRepository(pool)
 	telemetryRepo.UseAlertEvaluator(alertRepo)
+	hub := realtime.NewHub()
 
 	srv := &http.Server{
 		Addr: cfg.Addr(),
@@ -63,6 +65,7 @@ func run() error {
 			Devices:   device.NewRepository(pool),
 			Telemetry: telemetryRepo,
 			Alerts:    alertRepo,
+			Hub:       hub,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,

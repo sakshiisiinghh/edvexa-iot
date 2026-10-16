@@ -97,7 +97,7 @@ func countTelemetryForDevice(t *testing.T, pool *pgxpool.Pool, devicePK string) 
 
 func TestThresholdViolationCreatesOneAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-1")
 	if rec := postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0))); rec.Code != http.StatusOK {
 		t.Fatalf("create threshold status = %d, want 200; body=%s", rec.Code, rec.Body)
@@ -115,7 +115,7 @@ func TestThresholdViolationCreatesOneAlert(t *testing.T) {
 
 func TestIdenticalReplayCreatesNoSecondAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-2")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -134,7 +134,7 @@ func TestIdenticalReplayCreatesNoSecondAlert(t *testing.T) {
 
 func TestNewViolationWhileActiveCreatesNoSecondAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-3")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -155,7 +155,7 @@ func TestNewViolationWhileActiveCreatesNoSecondAlert(t *testing.T) {
 
 func TestNewViolationWhileAcknowledgedCreatesNoSecondAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-4")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -188,7 +188,7 @@ func TestNewViolationWhileAcknowledgedCreatesNoSecondAlert(t *testing.T) {
 // evaluating for. Both readings must persist, and exactly one alert exists.
 func TestConcurrentViolatingReadingsCreateExactlyOneAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-concurrent")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -223,7 +223,7 @@ func TestConcurrentViolatingReadingsCreateExactlyOneAlert(t *testing.T) {
 
 func TestAcknowledgeThenResolveAllowsNewAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-6")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -254,7 +254,7 @@ func TestAcknowledgeThenResolveAllowsNewAlert(t *testing.T) {
 
 func TestResolveAlreadyResolvedConflicts(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-7")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 	postJSON(t, router, "/v1/telemetry", eventBody("evt-alert-7", dev.DeviceID, "temperature", 10.0, time.Now()))
@@ -270,7 +270,7 @@ func TestResolveAlreadyResolvedConflicts(t *testing.T) {
 
 func TestAcknowledgeResolvedConflicts(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-8")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 	postJSON(t, router, "/v1/telemetry", eventBody("evt-alert-8", dev.DeviceID, "temperature", 10.0, time.Now()))
@@ -286,7 +286,7 @@ func TestAcknowledgeResolvedConflicts(t *testing.T) {
 
 func TestAcknowledgeTwiceConflicts(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-9")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 	postJSON(t, router, "/v1/telemetry", eventBody("evt-alert-9", dev.DeviceID, "temperature", 10.0, time.Now()))
@@ -302,7 +302,7 @@ func TestAcknowledgeTwiceConflicts(t *testing.T) {
 
 func TestAcknowledgeUnknownAlertNotFound(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, _, _ := newIntegrationRouter(pool)
+	router, _, _, _ := newIntegrationRouter(pool)
 
 	rec := doAction(router, "/v1/alerts/999999/acknowledge")
 	if rec.Code != http.StatusNotFound {
@@ -312,7 +312,7 @@ func TestAcknowledgeUnknownAlertNotFound(t *testing.T) {
 
 func TestThresholdRejectsMissingBounds(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-threshold-missing")
 
 	rec := postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, nil))
@@ -323,7 +323,7 @@ func TestThresholdRejectsMissingBounds(t *testing.T) {
 
 func TestThresholdRejectsInvertedBounds(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-threshold-inverted")
 
 	rec := postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "voltage", f64(12.0), f64(5.0)))
@@ -334,7 +334,7 @@ func TestThresholdRejectsInvertedBounds(t *testing.T) {
 
 func TestReadingWithinBoundsCreatesNoAlert(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-within")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 
@@ -350,7 +350,7 @@ func TestReadingWithinBoundsCreatesNoAlert(t *testing.T) {
 
 func TestListAlertsFiltersByStatus(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-alert-list")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 	postJSON(t, router, "/v1/telemetry", eventBody("evt-alert-list", dev.DeviceID, "temperature", 10.0, time.Now()))
@@ -385,7 +385,7 @@ func TestListAlertsFiltersByStatus(t *testing.T) {
 
 func TestListThresholdsReturnsUpserted(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices, _ := newIntegrationRouter(pool)
+	router, devices, _, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-threshold-list")
 	postJSON(t, router, "/v1/thresholds", thresholdBody(dev.DeviceID, "temperature", nil, f64(8.0)))
 

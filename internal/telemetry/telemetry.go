@@ -57,7 +57,11 @@ const (
 // Result carries the outcome plus the event that was submitted - what a
 // later caller needs to publish a notification. Insert itself does not
 // publish, so a message is never sent for a write that did not commit.
+// AlertCreated is only ever true alongside OutcomeCreated: a duplicate or
+// conflicting submission never reaches threshold evaluation at all.
 type Result struct {
-	Outcome Outcome
-	Event   Event
+	Outcome      Outcome
+	Event        Event
+	AlertCreated bool
+	AlertID      int64
 }

@@ -11,17 +11,21 @@ import (
 
 	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/realtime"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 )
 
-// Deps are the collaborators the routes need. A struct rather than a growing
-// parameter list, since later phases add alert lifecycle endpoints.
+// Deps are the collaborators the routes need. Hub may be nil - the handlers
+// that use it check before publishing, the same pattern telemetry.Repository
+// already uses for its optional AlertEvaluator - so tests that do not care
+// about real-time updates need not construct one.
 type Deps struct {
 	Logger    *slog.Logger
 	Pinger    Pinger
 	Devices   *device.Repository
 	Telemetry *telemetry.Repository
 	Alerts    *alert.Repository
+	Hub       *realtime.Hub
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -40,7 +44,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Patch("/v1/devices/{deviceID}", dev.update)
 	r.Post("/v1/devices/{deviceID}/deactivate", dev.deactivate)
 
-	tel := telemetryHandler{devices: d.Devices, telemetry: d.Telemetry, logger: d.Logger}
+	tel := telemetryHandler{devices: d.Devices, telemetry: d.Telemetry, hub: d.Hub, logger: d.Logger}
 	r.Post("/v1/telemetry", tel.ingest)
 	r.Get("/v1/devices/{deviceID}/telemetry", tel.listByDevice)
 
@@ -48,10 +52,14 @@ func NewRouter(d Deps) http.Handler {
 	r.Post("/v1/thresholds", th.upsert)
 	r.Get("/v1/thresholds", th.list)
 
-	al := alertHandler{alerts: d.Alerts, logger: d.Logger}
+	al := alertHandler{alerts: d.Alerts, hub: d.Hub, logger: d.Logger}
 	r.Get("/v1/alerts", al.list)
 	r.Post("/v1/alerts/{id}/acknowledge", al.acknowledge)
 	r.Post("/v1/alerts/{id}/resolve", al.resolve)
+
+	if d.Hub != nil {
+		r.Get("/v1/ws", d.Hub.ServeWS)
+	}
 
 	return r
 }

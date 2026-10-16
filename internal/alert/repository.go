@@ -179,32 +179,42 @@ func (r *Repository) transitionError(ctx context.Context, id int64) (Alert, erro
 // rolled back on account of losing an alert race. The WHERE clause on
 // ON CONFLICT must match migrations/0003_alerts.sql's partial unique index
 // exactly, or Postgres cannot infer which index the conflict target is.
-func (r *Repository) Evaluate(ctx context.Context, tx pgx.Tx, devicePK, metric string, value float64) error {
+//
+// RETURNING, not Exec, is what distinguishes "this call created the alert"
+// from "lost the race": ON CONFLICT DO NOTHING suppresses RETURNING too, so
+// a lost race surfaces as pgx.ErrNoRows here exactly as it does in
+// telemetry.Repository.Insert's own duplicate-detection query.
+func (r *Repository) Evaluate(ctx context.Context, tx pgx.Tx, devicePK, metric string, value float64) (alertID int64, created bool, err error) {
 	var thresholdID string
 	var minV, maxV *float64
-	err := tx.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT id, min_value, max_value FROM alert_thresholds WHERE device_pk = $1 AND metric = $2`,
 		devicePK, metric,
 	).Scan(&thresholdID, &minV, &maxV)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil // no threshold configured for this metric
+		return 0, false, nil // no threshold configured for this metric
 	}
 	if err != nil {
-		return fmt.Errorf("look up threshold: %w", err)
+		return 0, false, fmt.Errorf("look up threshold: %w", err)
 	}
 
 	violated := (minV != nil && value < *minV) || (maxV != nil && value > *maxV)
 	if !violated {
-		return nil
+		return 0, false, nil
 	}
 
-	_, err = tx.Exec(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO alerts (device_pk, metric, threshold_id, triggering_value)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (device_pk, metric) WHERE status IN ('active', 'acknowledged') DO NOTHING`,
-		devicePK, metric, thresholdID, value)
-	if err != nil {
-		return fmt.Errorf("insert alert: %w", err)
+		ON CONFLICT (device_pk, metric) WHERE status IN ('active', 'acknowledged') DO NOTHING
+		RETURNING id`,
+		devicePK, metric, thresholdID, value,
+	).Scan(&alertID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil // lost the race; a normal outcome, not an error
 	}
-	return nil
+	if err != nil {
+		return 0, false, fmt.Errorf("insert alert: %w", err)
+	}
+	return alertID, true, nil
 }
