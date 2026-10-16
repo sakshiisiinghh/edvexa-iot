@@ -1,0 +1,56 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 2rem;
+}
+
+h1 {
+  margin-bottom: 1.5rem;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid #8884;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+.hint {
+  color: #888;
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #c0392b;
+}
+
+.active {
+  color: #c0392b;
+  font-weight: 600;
+}
+
+.acknowledged {
+  color: #d68910;
+  font-weight: 600;
+}
+
+.resolved,
+.inactive {
+  color: #888;
+}
+
+button {
+  margin-right: 0.4rem;
+}
