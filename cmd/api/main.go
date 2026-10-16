@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/config"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/db"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
@@ -50,13 +51,18 @@ func run() error {
 	// connection mid-request.
 	defer pool.Close()
 
+	telemetryRepo := telemetry.NewRepository(pool)
+	alertRepo := alert.NewRepository(pool)
+	telemetryRepo.UseAlertEvaluator(alertRepo)
+
 	srv := &http.Server{
 		Addr: cfg.Addr(),
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Logger:    logger,
 			Pinger:    pool,
 			Devices:   device.NewRepository(pool),
-			Telemetry: telemetry.NewRepository(pool),
+			Telemetry: telemetryRepo,
+			Alerts:    alertRepo,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,

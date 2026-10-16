@@ -9,17 +9,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 )
 
 // Deps are the collaborators the routes need. A struct rather than a growing
-// parameter list, since later phases add thresholds and alerts.
+// parameter list, since later phases add alert lifecycle endpoints.
 type Deps struct {
 	Logger    *slog.Logger
 	Pinger    Pinger
 	Devices   *device.Repository
 	Telemetry *telemetry.Repository
+	Alerts    *alert.Repository
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -41,6 +43,15 @@ func NewRouter(d Deps) http.Handler {
 	tel := telemetryHandler{devices: d.Devices, telemetry: d.Telemetry, logger: d.Logger}
 	r.Post("/v1/telemetry", tel.ingest)
 	r.Get("/v1/devices/{deviceID}/telemetry", tel.listByDevice)
+
+	th := thresholdHandler{devices: d.Devices, thresholds: d.Alerts, logger: d.Logger}
+	r.Post("/v1/thresholds", th.upsert)
+	r.Get("/v1/thresholds", th.list)
+
+	al := alertHandler{alerts: d.Alerts, logger: d.Logger}
+	r.Get("/v1/alerts", al.list)
+	r.Post("/v1/alerts/{id}/acknowledge", al.acknowledge)
+	r.Post("/v1/alerts/{id}/resolve", al.resolve)
 
 	return r
 }

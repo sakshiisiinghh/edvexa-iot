@@ -17,20 +17,29 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/sakshiisiinghh/edvexa-iot/internal/alert"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/testdb"
 )
 
-func newIntegrationRouter(pool *pgxpool.Pool) (http.Handler, *device.Repository) {
+// newIntegrationRouter wires every repository exactly as cmd/api/main.go
+// does, including UseAlertEvaluator, so these tests exercise the same
+// configuration that actually runs - not a simplified stand-in for it.
+func newIntegrationRouter(pool *pgxpool.Pool) (http.Handler, *device.Repository, *alert.Repository) {
 	devices := device.NewRepository(pool)
+	telemetryRepo := telemetry.NewRepository(pool)
+	alerts := alert.NewRepository(pool)
+	telemetryRepo.UseAlertEvaluator(alerts)
+
 	r := NewRouter(Deps{
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Pinger:    pool,
 		Devices:   devices,
-		Telemetry: telemetry.NewRepository(pool),
+		Telemetry: telemetryRepo,
+		Alerts:    alerts,
 	})
-	return r, devices
+	return r, devices, alerts
 }
 
 func mustCreateDevice(t *testing.T, repo *device.Repository, deviceID string) device.Device {
@@ -94,7 +103,7 @@ func storedValue(t *testing.T, pool *pgxpool.Pool, eventID string) float64 {
 
 func TestIngestIdempotentOnIdenticalResubmission(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-idem")
 
 	body := eventBody("evt-idem", dev.DeviceID, "temperature", 4.5, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -114,7 +123,7 @@ func TestIngestIdempotentOnIdenticalResubmission(t *testing.T) {
 // survives - not silently overwritten by the conflicting value.
 func TestIngestRejectsConflictingPayload(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-conflict")
 	recordedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -143,7 +152,7 @@ func TestIngestRejectsConflictingPayload(t *testing.T) {
 // property rather than an assumption read off the code.
 func TestIngestConcurrentIdenticalSubmissions(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-concurrent-dup")
 
 	data, err := json.Marshal(eventBody("evt-concurrent-dup", dev.DeviceID, "temperature", 4.5,
@@ -196,7 +205,7 @@ func TestIngestConcurrentIdenticalSubmissions(t *testing.T) {
 // conflict - never the reverse, and never a second row.
 func TestIngestConcurrentConflictingSubmissions(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-concurrent-conflict")
 	recordedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -268,7 +277,7 @@ func TestIngestConcurrentConflictingSubmissions(t *testing.T) {
 
 func TestIngestRejectsInactiveDevice(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-inactive")
 	if _, err := devices.Deactivate(context.Background(), dev.DeviceID); err != nil {
 		t.Fatalf("deactivate device: %v", err)
@@ -286,7 +295,7 @@ func TestIngestRejectsInactiveDevice(t *testing.T) {
 
 func TestIngestRejectsUnknownDevice(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, _ := newIntegrationRouter(pool)
+	router, _, _ := newIntegrationRouter(pool)
 
 	rec := postJSON(t, router, "/v1/telemetry",
 		eventBody("evt-unknown", "does-not-exist", "temperature", 1.0, time.Now()))
@@ -300,7 +309,7 @@ func TestIngestRejectsUnknownDevice(t *testing.T) {
 
 func TestListByDeviceReturnsRecentReadings(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, devices := newIntegrationRouter(pool)
+	router, devices, _ := newIntegrationRouter(pool)
 	dev := mustCreateDevice(t, devices, "dev-list")
 
 	for i, v := range []float64{1, 2, 3} {
@@ -331,7 +340,7 @@ func TestListByDeviceReturnsRecentReadings(t *testing.T) {
 
 func TestListByDeviceUnknownDevice(t *testing.T) {
 	pool := testdb.Connect(t)
-	router, _ := newIntegrationRouter(pool)
+	router, _, _ := newIntegrationRouter(pool)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/devices/does-not-exist/telemetry", nil)

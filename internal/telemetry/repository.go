@@ -9,12 +9,34 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// AlertEvaluator is implemented by internal/alert.Repository. Defined here,
+// not there, so neither package needs to import the other: alert's method
+// set happens to satisfy this interface structurally, and main.go is the
+// only place that wires the two together.
+type AlertEvaluator interface {
+	// Evaluate runs inside the caller's transaction. A violation that loses
+	// the race to create an alert is a normal outcome, not an error - see
+	// internal/alert.Repository.Evaluate. Any error returned here aborts the
+	// whole transaction, including the telemetry row just inserted: alert
+	// state and telemetry state are meant to rise and fall together.
+	Evaluate(ctx context.Context, tx pgx.Tx, devicePK, metric string, value float64) error
+}
+
 type Repository struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	evaluator AlertEvaluator
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
+}
+
+// UseAlertEvaluator wires threshold evaluation into Insert, invoked inside
+// the same transaction as a successful write. Optional: a Repository with
+// no evaluator just never evaluates thresholds, which every test written
+// before alerts existed already relies on.
+func (r *Repository) UseAlertEvaluator(e AlertEvaluator) {
+	r.evaluator = e
 }
 
 // Insert records a reading, or reports why it was not recorded again. The
@@ -44,6 +66,13 @@ func (r *Repository) Insert(ctx context.Context, in Event) (Result, error) {
 
 	switch {
 	case err == nil:
+		// Only a genuine create reaches here - never a duplicate or conflict -
+		// so a duplicate reading cannot raise a second alert.
+		if r.evaluator != nil {
+			if err := r.evaluator.Evaluate(ctx, tx, in.DevicePK, in.Metric, in.Value); err != nil {
+				return Result{}, fmt.Errorf("evaluate thresholds: %w", err)
+			}
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return Result{}, fmt.Errorf("commit: %w", err)
 		}
