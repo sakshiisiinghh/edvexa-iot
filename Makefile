@@ -4,8 +4,6 @@ BINARY := bin/api
 # an advisory lock; if anything ever does, the keys must not collide.
 MIGRATION_LOCK := 4242424242
 
-TEST_DB := edvexa_test
-
 ENVLOAD := set -a; if [ -f .env ]; then . ./.env; fi; set +a
 # PSQL takes the database as its next argument, so the same plumbing serves the
 # development and test databases.
@@ -71,11 +69,7 @@ migrate-status: ## Show applied and pending migrations
 	done
 
 test-integration: ## Run integration tests against a real PostgreSQL
-	@$(ENVLOAD); \
-	echo "preparing $(TEST_DB)"; \
-	$(PSQL) postgres -q -c "CREATE DATABASE $(TEST_DB)" >/dev/null 2>&1 || true; \
-	$(call apply_migrations,$(TEST_DB)); \
-	go test -tags=integration -race -count=1 -p 1 ./...
+	@$(ENVLOAD); go test -tags=integration -race -count=1 ./...
 
 db-up: ## Start PostgreSQL and block until it is healthy
 	docker compose up -d --wait postgres

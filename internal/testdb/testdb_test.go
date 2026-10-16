@@ -7,24 +7,23 @@ import (
 	"testing"
 )
 
+// Connect's provisioning applies migrations/*.sql directly rather than
+// through the Makefile's schema_migrations bookkeeping, which these
+// throwaway per-package databases have no use for - so "migrated" is
+// checked here by querying for the tables the migrations actually create,
+// not by a tracking row that intentionally does not exist in this path.
 func TestConnectGivesAMigratedDatabase(t *testing.T) {
 	pool := Connect(t)
 	ctx := context.Background()
 
-	var applied int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&applied); err != nil {
-		t.Fatalf("count schema_migrations: %v", err)
-	}
-	if applied == 0 {
-		t.Error("no migrations recorded in the test database")
-	}
-
-	var devices int
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM devices").Scan(&devices); err != nil {
-		t.Fatalf("count devices: %v", err)
-	}
-	if devices != 0 {
-		t.Errorf("devices has %d rows, want 0", devices)
+	for _, table := range []string{"devices", "telemetry_events"} {
+		var n int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+			t.Fatalf("%s is not queryable, so the schema was not applied: %v", table, err)
+		}
+		if n != 0 {
+			t.Errorf("%s has %d rows, want 0", table, n)
+		}
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/sakshiisiinghh/edvexa-iot/internal/db"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/httpapi"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/telemetry"
 )
 
 // readHeaderTimeout is separate from ReadTimeout: handlers routinely extend
@@ -52,9 +53,10 @@ func run() error {
 	srv := &http.Server{
 		Addr: cfg.Addr(),
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Logger:  logger,
-			Pinger:  pool,
-			Devices: device.NewRepository(pool),
+			Logger:    logger,
+			Pinger:    pool,
+			Devices:   device.NewRepository(pool),
+			Telemetry: telemetry.NewRepository(pool),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
