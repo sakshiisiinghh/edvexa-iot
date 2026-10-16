@@ -8,16 +8,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 )
 
-func NewRouter(logger *slog.Logger, p Pinger) http.Handler {
+// Deps are the collaborators the routes need. A struct rather than a growing
+// parameter list, since later phases add telemetry, thresholds and alerts.
+type Deps struct {
+	Logger  *slog.Logger
+	Pinger  Pinger
+	Devices *device.Repository
+}
+
+func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 	// requestLogger sits outside Recoverer so a panic is still logged, with the
 	// 500 that Recoverer writes.
-	r.Use(middleware.RequestID, middleware.RealIP, requestLogger(logger), middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.RealIP, requestLogger(d.Logger), middleware.Recoverer)
 
 	r.Get("/healthz", handleHealthz)
-	r.Get("/readyz", handleReadyz(p))
+	r.Get("/readyz", handleReadyz(d.Pinger))
+
+	dev := deviceHandler{repo: d.Devices, logger: d.Logger}
+	r.Post("/v1/devices", dev.create)
+	r.Get("/v1/devices", dev.list)
+	r.Get("/v1/devices/{deviceID}", dev.get)
+	r.Patch("/v1/devices/{deviceID}", dev.update)
+	r.Post("/v1/devices/{deviceID}/deactivate", dev.deactivate)
+
 	return r
 }
 

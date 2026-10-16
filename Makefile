@@ -75,7 +75,7 @@ test-integration: ## Run integration tests against a real PostgreSQL
 	echo "preparing $(TEST_DB)"; \
 	$(PSQL) postgres -q -c "CREATE DATABASE $(TEST_DB)" >/dev/null 2>&1 || true; \
 	$(call apply_migrations,$(TEST_DB)); \
-	go test -tags=integration -race -count=1 ./...
+	go test -tags=integration -race -count=1 -p 1 ./...
 
 db-up: ## Start PostgreSQL and block until it is healthy
 	docker compose up -d --wait postgres

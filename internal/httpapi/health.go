@@ -37,7 +37,7 @@ func handleReadyz(p Pinger) http.HandlerFunc {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, status int, body map[string]string) {
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	// The status line is already sent, so a write failure here (client gone)

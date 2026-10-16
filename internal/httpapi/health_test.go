@@ -24,7 +24,10 @@ func (f *fakePinger) Ping(ctx context.Context) error {
 }
 
 func newTestRouter(p Pinger) http.Handler {
-	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), p)
+	return NewRouter(Deps{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Pinger: p,
+	})
 }
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {

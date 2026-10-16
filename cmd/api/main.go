@@ -13,6 +13,7 @@ import (
 
 	"github.com/sakshiisiinghh/edvexa-iot/internal/config"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/db"
+	"github.com/sakshiisiinghh/edvexa-iot/internal/device"
 	"github.com/sakshiisiinghh/edvexa-iot/internal/httpapi"
 )
 
@@ -49,8 +50,12 @@ func run() error {
 	defer pool.Close()
 
 	srv := &http.Server{
-		Addr:              cfg.Addr(),
-		Handler:           httpapi.NewRouter(logger, pool),
+		Addr: cfg.Addr(),
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Logger:  logger,
+			Pinger:  pool,
+			Devices: device.NewRepository(pool),
+		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       cfg.ReadTimeout,
 		WriteTimeout:      cfg.WriteTimeout,
