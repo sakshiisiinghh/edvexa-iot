@@ -63,13 +63,21 @@ curl -s -X POST localhost:8080/v1/telemetry -H 'Content-Type: application/json' 
   -d '{"event_id":"demo-1","device_id":"freezer-1","metric":"temperature","value":15.0,"recorded_at":"2026-01-01T00:00:00Z"}'
 ```
 
-Open `http://localhost:5173` before or after running these - the device,
-the new telemetry reading, and the alert it raises all appear live, pushed
-over the WebSocket connection the dashboard opens on load. Acknowledge and
+Open `http://localhost:5173` before submitting telemetry - the reading and
+the alert it raises appear live, pushed over the WebSocket connection the
+dashboard opens on load. The device list is fetched when the page loads, so
+a device registered after that shows up on the next refresh. Acknowledge and
 resolve the alert from the dashboard's buttons, or via `curl` against
 `/v1/alerts/{id}/acknowledge` and `/v1/alerts/{id}/resolve`.
 
-*(Screenshots or a short screen recording of this flow go here.)*
+Readings streaming in, with the 11.2 reading crossing the 8.0 threshold and
+raising an alert:
+
+![Dashboard with live telemetry and a new active alert](docs/screenshots/dashboard-live.png)
+
+The same alert after clicking Acknowledge - only Resolve remains:
+
+![Dashboard after acknowledging the alert](docs/screenshots/dashboard-acknowledged.png)
 
 ## Configuration
 
